@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.center-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px;
+  gap: 24px;
+}
+
+.full-grid {
+  height: 100%;
+  padding: 0;
+}
+
+.half-row {
+  height: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.half-col {
+  height: 100%;
+}
+
+.full-btn {
+  height: 100%;
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.4rem;
+  font-size: large;
+  font-weight: bold;
+  --border-radius: 12px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+ion-button {
+  --border-radius: 0;
+  --border-color: #000;
+  --border-style: solid;
+  --border-width: 2px;
+  --box-shadow: 0 2px 6px 0 rgb(0, 0, 0, 0.25);
+  --ripple-color: deeppink;
+}
+
+ion-button.go {
+  --background: #247e51;
+  --background-hover: #38c981;
+  --background-activated: #38c981;
+  --background-focused: #38c981;
+  --color: black;
+  padding-bottom: 50px;
+}
+
+ion-button.save {
+  --background: #e31818;
+  --background-hover: #de4848;
+  --background-activated: #de4848;
+  --background-focused: #de4848;
+  --color: white;
+  padding-top: 40px;
+}
