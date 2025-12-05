@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   server: {
     // per sviluppo su rete locale (opzionale)
     // url: 'http://192.168.0.1:5173',
-    // cleartext: true
+    // cleartext: true,
     androidScheme: "https",
   },
   android: {

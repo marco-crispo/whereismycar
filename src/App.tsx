@@ -10,96 +10,172 @@ import {
   IonGrid,
   IonRow,
   IonCol,
+  IonToast,
+  IonSelect,
+  IonSelectOption,
+  IonInput,
 } from "@ionic/react";
-import React, { useEffect, useState } from "react";
+import React, { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { Geolocation } from "@capacitor/geolocation";
+import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
-
-const STORAGE_KEY = "savedPos";
-
-type Pos = { lat: number; lng: number } | null;
+import { STORAGE_KEY } from "./types/constants";
+import { Positions } from "./types/GlobalTypes";
+import GlobalModal from "./components/GlobalModal";
 
 const App: React.FC = () => {
-  const [savedPos, setSavedPos] = useState<Pos>(null);
+  const [message, setMessage] = useState<string | undefined>("");
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [savedPos, setSavedPos] = useState<Positions[]>([]);
+  const select = useRef<HTMLIonSelectElement>(null) as React.RefObject<HTMLIonSelectElement>;
+  const input = useRef<HTMLIonInputElement>(null) as React.RefObject<HTMLIonInputElement>;
+  const modalGo = useRef<HTMLIonModalElement>(null) as React.RefObject<HTMLIonModalElement>;
+  const modalSave = useRef<HTMLIonModalElement>(null) as React.RefObject<HTMLIonModalElement>;
 
-  useEffect(() => {
-    // Chiede permessi appena l'app si avvia
-    (async () => {
-      try {
-        const status = await Geolocation.requestPermissions();
 
-        console.log("Permessi location:", status);
-      } catch (e) {
-        console.error("Errore richiesta permessi", e);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
+  if (savedPos.length === 0) {
     const s = localStorage.getItem(STORAGE_KEY);
-    if (s) setSavedPos(JSON.parse(s));
-    console.log(savedPos);
+    if (s) {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) {
+        const newDate = new Date();
+        newDate.setDate(newDate.getDate() - 1);
+        parsed.filter((p) => {
+          if (p.timestamp) {
+            const d = new Date(p.timestamp);
+            return d >= newDate;
+          }
+          return false;
+        });
+      }
 
-    // listen for deep links / shortcuts
-    const handler = CapacitorApp.addListener("appUrlOpen", (data: any) => {
+      setSavedPos(parsed);
+    }
+  }
+  const onWillDismissSave = async (event: CustomEvent) => {
+    const role = event.detail.role;
+    if (role === "confirm") {
+      const positionName = event.detail.data;
+      doSave(positionName);
+    }
+  };
+
+  const onWillDismissGo = async (event: CustomEvent) => {
+    const role = event.detail.role;
+    if (role === "confirm") {
+
+      const positionName = event.detail.data;
+      const position = savedPos.find((p) => p.name === positionName)?.coords;
+      if (!position) return;
+      console.log("Confirm!", position);
+      // Open native maps via geo: URI (Android) or maps.apple.com (iOS)
+      // We'll attempt both via App openUrl handled natively in capacitor
+      const geo = `geo:${position.lat},${position.lng}?q=${position.lat},${position.lng}`;
+      const apple = `https://maps.apple.com/?daddr=${position.lat},${position.lng}&dirflg=d`;
+      // try to open geo: first (Android), fallback to apple maps url
       try {
-        const url = new URL(data.url);
-        const action = url.searchParams.get("action");
-        if (action === "save") doSave();
-        if (action === "go") doGo();
+        // dynamic import to keep bundles small
+        const { AppLauncher } = await import("@capacitor/app-launcher");
+        await AppLauncher.openUrl({ url: geo });
       } catch (e) {
+        const { AppLauncher } = await import("@capacitor/app-launcher");
+        await AppLauncher.openUrl({ url: apple });
         console.log(e);
       }
-    });
+    }
+  };
 
-    return () => {
-      handler.then((h) => h.remove());
-    };
-  }, []);
-
-  useEffect(() => {
-    const handler = CapacitorApp.addListener("backButton", () => {
-      // chiude l'app se premuto il tasto fisico
-      CapacitorApp.exitApp();
-    });
-
-    return () => {
-      handler.then((h) => h.remove());
-    };
-  }, []);
-
-  const doSave = async () => {
+  const doSave = useCallback(async (positionName: string) => {
     const pos = await Geolocation.getCurrentPosition({
       enableHighAccuracy: true,
       timeout: 8000, // facoltativo
       maximumAge: 0, // evita cache
     });
-    const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-    setSavedPos(p);
+    const p: Positions = {
+      coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+      name: positionName,
+      timestamp: Date.now()
+    };
+    savedPos.push(p);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedPos));
+    setSavedPos([...savedPos]);
     // minimal feedback
-    alert("Posizione salvata");
-  };
+    setMessage(`Bene Nino, hai salvato la posizione "${positionName}"`);
+    setIsOpen(true);
+  }, [savedPos]);
 
-  const doGo = async () => {
-    const s = localStorage.getItem(STORAGE_KEY);
-    if (!s) return alert("Nessuna posizione salvata");
-    const p = JSON.parse(s);
-    // Open native maps via geo: URI (Android) or maps.apple.com (iOS)
-    // We'll attempt both via App openUrl handled natively in capacitor
-    const geo = `geo:${p.lat},${p.lng}?q=${p.lat},${p.lng}`;
-    const apple = `https://maps.apple.com/?daddr=${p.lat},${p.lng}&dirflg=d`;
-    // try to open geo: first (Android), fallback to apple maps url
-    try {
-      // dynamic import to keep bundles small
-      const { AppLauncher } = await import("@capacitor/app-launcher");
-      await AppLauncher.openUrl({ url: geo });
-    } catch (e) {
-      const { AppLauncher } = await import("@capacitor/app-launcher");
-      await AppLauncher.openUrl({ url: apple });
-      console.log(e);
+  const createElemForGo = useCallback((): JSX.Element => {
+    let p: Positions[] | null = null;
+    if (savedPos?.length === 0) {
+      const s: string | null = localStorage.getItem(STORAGE_KEY);
+      if (!s) return <></>;
+      p = JSON.parse(s);
+    } else {
+      p = savedPos;
     }
-  };
+    return (
+      <IonSelect
+        ref={select}
+        aria-label="Position"
+        placeholder="Seleziona una posizione"
+      >
+        {p &&
+          p.map((pos, index) => (
+            <IonSelectOption key={`pos-${index}`}>{pos.name}</IonSelectOption>
+          ))}
+      </IonSelect>
+    );
+  }, [savedPos]);
+
+  const createElemForSave = useCallback((): JSX.Element => {
+    return (
+      <IonInput
+        ref={input}
+        aria-label="Position"
+        placeholder="Dai un nome per la posizione"
+        maxlength={20}
+      />
+    );
+  }, []);
+
+  useEffect(() => {
+    // Chiede permessi appena l'app si avvia
+    (async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const status = await Geolocation.requestPermissions();
+          console.log("Permessi location:", status);
+        } catch (e) {
+          console.error("Errore richiesta permessi", e);
+        }
+      }
+    })();
+
+    // // listen for deep links / shortcuts
+    // const handlerAppUrlOpen = CapacitorApp.addListener(
+    //   "appUrlOpen",
+    //   (data: AppUrlOpenData) => {
+    //     try {
+    //       const url = new URL(data.url);
+    //       const action = url.searchParams.get("action");
+    //       if (action === "save") doSave("Shortcut Save");
+    //       if (action === "go") doGo();
+    //     } catch (e) {
+    //       console.log(e);
+    //     }
+    //   }
+    // );
+
+    const handlerBackButton = CapacitorApp.addListener("backButton", () => {
+      // chiude l'app se premuto il tasto fisico
+      CapacitorApp.exitApp();
+    });
+
+    return () => {
+      // handlerAppUrlOpen.then((h) => h.remove());
+      handlerBackButton.then((h) => h.remove());
+    };
+  }, []);
 
   return (
     <IonApp>
@@ -114,23 +190,52 @@ const App: React.FC = () => {
           <IonGrid className="full-grid">
             <IonRow className="half-row">
               <IonCol className="half-col">
-                <IonButton expand="block" className="full-btn save" onClick={doSave}>
-                  Ciao Nino, cliccami per ricordare dove hai parcheggiato!
+                <IonButton
+                  expand="block"
+                  className="full-btn save"
+                  id="open-modal-save"
+                >
+                  Nino, cliccami per salvare la posizione della tua auto.
                 </IonButton>
               </IonCol>
             </IonRow>
 
             <IonRow className="half-row">
               <IonCol className="half-col">
-                <IonButton expand="block" className="full-btn go" onClick={doGo}>
-                  Ciao Nino, cliccami per sapere dove hai parcheggiato l'ultima
-                  volta.
+                <IonButton
+                  expand="block"
+                  className="full-btn go"
+                  id="open-modal-go"
+                >
+                  Nino, cliccami per scoprire dove hai parcheggiato.
                 </IonButton>
               </IonCol>
             </IonRow>
           </IonGrid>
+          <IonToast
+            className="custom-toast"
+            isOpen={isOpen}
+            message={message}
+            duration={5000}
+            onDidDismiss={() => setIsOpen(false)}
+            position="middle"
+          ></IonToast>
         </IonContent>
       </IonPage>
+      <GlobalModal
+        onWillDismiss={onWillDismissSave}
+        callback={createElemForSave}
+        input={input}
+        name="open-modal-save"
+        modal={modalSave}
+      />
+      <GlobalModal
+        onWillDismiss={onWillDismissGo}
+        callback={createElemForGo}
+        input={select}
+        name="open-modal-go"
+        modal={modalGo}
+      />
     </IonApp>
   );
 };
