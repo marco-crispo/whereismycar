@@ -50,7 +50,7 @@ ion-button.go::part(native) {
 .full-btn {
   height: 100%;
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  font-size: 2rem;
+  font-size: clamp(1rem, 6vw, 2.5rem);
   font-weight: bold;
   padding-top: 20px;
   padding-bottom: 20px;
