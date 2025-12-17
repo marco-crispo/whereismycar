@@ -14,6 +14,7 @@ import {
   IonSelect,
   IonSelectOption,
   IonInput,
+  IonLabel,
 } from "@ionic/react";
 import React, { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { Geolocation } from "@capacitor/geolocation";
@@ -32,26 +33,6 @@ const App: React.FC = () => {
   const modalGo = useRef<HTMLIonModalElement>(null) as React.RefObject<HTMLIonModalElement>;
   const modalSave = useRef<HTMLIonModalElement>(null) as React.RefObject<HTMLIonModalElement>;
 
-
-  if (savedPos.length === 0) {
-    const s = localStorage.getItem(STORAGE_KEY);
-    if (s) {
-      const parsed = JSON.parse(s);
-      if (Array.isArray(parsed)) {
-        const newDate = new Date();
-        newDate.setDate(newDate.getDate() - 1);
-        parsed.filter((p) => {
-          if (p.timestamp) {
-            const d = new Date(p.timestamp);
-            return d >= newDate;
-          }
-          return false;
-        });
-      }
-
-      setSavedPos(parsed);
-    }
-  }
   const onWillDismissSave = async (event: CustomEvent) => {
     const role = event.detail.role;
     if (role === "confirm") {
@@ -85,17 +66,23 @@ const App: React.FC = () => {
     }
   };
 
-  const doSave = useCallback(async (positionName: string) => {
+  const doSave = useCallback(async (positionName?: string) => {
     const pos = await Geolocation.getCurrentPosition({
       enableHighAccuracy: true,
       timeout: 8000, // facoltativo
       maximumAge: 0, // evita cache
     });
+
+    const address = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+    positionName = positionName ? positionName : address
+
     const p: Positions = {
       coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-      name: positionName,
+      name: positionName ? positionName : address,
+      address: address,
       timestamp: Date.now()
     };
+
     savedPos.push(p);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(savedPos));
     setSavedPos([...savedPos]);
@@ -103,6 +90,15 @@ const App: React.FC = () => {
     setMessage(`Bene Nino, hai salvato la posizione "${positionName}"`);
     setIsOpen(true);
   }, [savedPos]);
+
+
+  const reverseGeocode = async (lat: number, lng: number) => {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+    );
+    const data = await res.json();
+    return data.display_name as string;
+  };
 
   const createElemForGo = useCallback((): JSX.Element => {
     let p: Positions[] | null = null;
@@ -129,12 +125,16 @@ const App: React.FC = () => {
 
   const createElemForSave = useCallback((): JSX.Element => {
     return (
-      <IonInput
-        ref={input}
-        aria-label="Position"
-        placeholder="Dai un nome per la posizione"
-        maxlength={20}
-      />
+      <div>
+        <IonLabel position="stacked" className="ion-text-wrap full-label">
+          Dai un nome alla posizione o lascia in bianco per usare l'indirizzo
+        </IonLabel>
+        <IonInput
+          ref={input}
+          aria-label="Position"
+          maxlength={20}
+        />
+      </div>
     );
   }, []);
 
@@ -150,6 +150,27 @@ const App: React.FC = () => {
         }
       }
     })();
+
+    if (savedPos.length === 0) {
+      const s = localStorage.getItem(STORAGE_KEY);
+      if (s) {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const newDate = new Date();
+          newDate.setDate(newDate.getDate() - 5);
+          parsed.filter((p) => {
+            if (p.timestamp) {
+              const d = new Date(p.timestamp);
+              return d >= newDate;
+            }
+            return false;
+          });
+        }
+
+        setSavedPos(parsed);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedPos));
+      }
+    }
 
     // // listen for deep links / shortcuts
     // const handlerAppUrlOpen = CapacitorApp.addListener(
