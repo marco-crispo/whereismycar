@@ -54,7 +54,6 @@ ion-button.go::part(native) {
   font-weight: bold;
   padding-top: 20px;
   padding-bottom: 20px;
-  box-shadow: rgba(0, 0, 0, 0.1) 0 2px 4px;
   display: inline-block;
   line-height: 40px;
   outline: 0;
@@ -71,6 +70,16 @@ ion-button.go::part(native) {
   z-index: 9;
   border: 0;
   transition: box-shadow .2s;
+}
+
+.full-btn.save::part(native) {
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, .5);
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, .5);
+}
+
+.full-btn.go::part(native) {
+  text-shadow: 2px 2px 4px rgba(1, 1, 1, .5);
+  box-shadow: 0px 4px 6px rgba(1, 1, 1, .5);
 }
 
 
